@@ -10,6 +10,7 @@ nltk>=3.8.1
 # Data Processing & Utilities
 tqdm>=4.65.0
 pyyaml>=6.0
+datasets>=2.14.0
 
 # Visualization
 matplotlib>=3.7.0

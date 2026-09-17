@@ -1,0 +1,22 @@
+# Model Architecture Configurations for English-to-Amharic Seq2Seq NMT
+
+model:
+  architecture: "seq2seq_lstm"
+  embedding_dim: 256
+  hidden_dim: 512
+  num_layers: 1
+  dropout: 0.2
+
+tokens:
+  pad_idx: 0
+  unk_idx: 1
+  sos_idx: 2
+  eos_idx: 3
+  special_tokens:
+    - "<PAD>"
+    - "<UNK>"
+    - "<SOS>"
+    - "<EOS>"
+
+sequences:
+  max_len: 70
