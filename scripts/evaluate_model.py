@@ -1,4 +1,4 @@
-"""Evaluate the trained baseline model and save a compact report."""
+"""Evaluate the trained seq2seq model and save a compact report."""
 
 import json
 import os
@@ -18,9 +18,11 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.data.dataset import TranslationDataset, get_dataloader
 from src.data.vocabulary import load_vocab
 from src.inference.translator import translate_sentence
+from src.models.attention import AttentionDecoder, AttentionSeq2Seq
 from src.models.decoder import Decoder
 from src.models.encoder import Encoder
 from src.models.seq2seq import Seq2Seq, count_parameters
+from src.models.transformer import TransformerSeq2Seq
 from src.training.evaluate import evaluate_epoch
 from src.utils.paths import get_data_paths
 
@@ -29,6 +31,7 @@ DATA_ROOT = os.getenv("DATA_ROOT", str(PROJECT_ROOT / "data"))
 paths = get_data_paths(DATA_ROOT)
 max_samples = int(os.getenv("MAX_EVAL_SAMPLES", "20"))
 max_len = int(os.getenv("MAX_LEN", "70"))
+model_type = os.getenv("MODEL_TYPE", "transformer").lower()
 
 eng_vocab = load_vocab(paths.eng_vocab_path)
 amh_vocab = load_vocab(paths.amh_vocab_path)
@@ -36,10 +39,30 @@ amh_vocab_inv = {index: token for token, index in amh_vocab.items()}
 test_df = pd.read_csv(paths.test_filtered_path).head(max_samples)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-encoder = Encoder(len(eng_vocab), embedding_dim=256, hidden_dim=512, num_layers=1, dropout=0.2)
-decoder = Decoder(len(amh_vocab), embedding_dim=256, hidden_dim=512, num_layers=1, dropout=0.2)
-model = Seq2Seq(encoder, decoder, device=device).to(device)
-checkpoint_path = PROJECT_ROOT / "models" / "baseline_seq2seq.pt"
+if model_type == "attention":
+    encoder = Encoder(len(eng_vocab), embedding_dim=256, hidden_dim=512, num_layers=1, dropout=0.2)
+    decoder = AttentionDecoder(len(amh_vocab), embedding_dim=256, hidden_dim=512, num_layers=1, dropout=0.2)
+    model = AttentionSeq2Seq(encoder, decoder, device=device).to(device)
+    checkpoint_path = PROJECT_ROOT / "models" / "attention_seq2seq.pt"
+elif model_type == "transformer":
+    model = TransformerSeq2Seq(
+        src_vocab_size=len(eng_vocab),
+        trg_vocab_size=len(amh_vocab),
+        d_model=128,
+        nhead=4,
+        num_layers=2,
+        dim_feedforward=256,
+        dropout=0.1,
+        max_seq_len=200,
+        device=device,
+    ).to(device)
+    checkpoint_path = PROJECT_ROOT / "models" / "transformer_seq2seq.pt"
+else:
+    encoder = Encoder(len(eng_vocab), embedding_dim=256, hidden_dim=512, num_layers=1, dropout=0.2)
+    decoder = Decoder(len(amh_vocab), embedding_dim=256, hidden_dim=512, num_layers=1, dropout=0.2)
+    model = Seq2Seq(encoder, decoder, device=device).to(device)
+    checkpoint_path = PROJECT_ROOT / "models" / "baseline_seq2seq.pt"
+
 if not checkpoint_path.exists():
     raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 model.load_state_dict(torch.load(checkpoint_path, map_location=device))

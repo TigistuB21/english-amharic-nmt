@@ -18,9 +18,12 @@ from src.data.vocabulary import (
     UNK_IDX,
     load_vocab,
 )
+from src.inference.translator import translate_sentence
+from src.models.attention import AttentionDecoder, AttentionSeq2Seq
 from src.models.decoder import Decoder
 from src.models.encoder import Encoder
 from src.models.seq2seq import Seq2Seq
+from src.models.transformer import TransformerSeq2Seq
 from src.utils.paths import get_data_paths
 
 
@@ -70,11 +73,32 @@ def source_token_id(token: str) -> int:
             return eng_vocab[candidate]
     return UNK_IDX
 
-encoder = Encoder(input_dim=len(eng_vocab), embedding_dim=256, hidden_dim=512, num_layers=1, dropout=0.2, pad_idx=PAD_IDX)
-decoder = Decoder(output_dim=len(amh_vocab), embedding_dim=256, hidden_dim=512, num_layers=1, dropout=0.2, pad_idx=PAD_IDX)
-model = Seq2Seq(encoder, decoder)
+model_type = os.getenv("MODEL_TYPE", "transformer").lower()
+if model_type == "attention":
+    encoder = Encoder(input_dim=len(eng_vocab), embedding_dim=256, hidden_dim=512, num_layers=1, dropout=0.2, pad_idx=PAD_IDX)
+    decoder = AttentionDecoder(output_dim=len(amh_vocab), embedding_dim=256, hidden_dim=512, num_layers=1, dropout=0.2, pad_idx=PAD_IDX)
+    model = AttentionSeq2Seq(encoder, decoder)
+    model_path = PROJECT_ROOT / "models" / "attention_seq2seq.pt"
+elif model_type == "transformer":
+    model = TransformerSeq2Seq(
+        src_vocab_size=len(eng_vocab),
+        trg_vocab_size=len(amh_vocab),
+        d_model=128,
+        nhead=4,
+        num_layers=2,
+        dim_feedforward=256,
+        dropout=0.1,
+        max_seq_len=200,
+        pad_idx=PAD_IDX,
+        device="cpu",
+    )
+    model_path = PROJECT_ROOT / "models" / "transformer_seq2seq.pt"
+else:
+    encoder = Encoder(input_dim=len(eng_vocab), embedding_dim=256, hidden_dim=512, num_layers=1, dropout=0.2, pad_idx=PAD_IDX)
+    decoder = Decoder(output_dim=len(amh_vocab), embedding_dim=256, hidden_dim=512, num_layers=1, dropout=0.2, pad_idx=PAD_IDX)
+    model = Seq2Seq(encoder, decoder)
+    model_path = PROJECT_ROOT / "models" / "baseline_seq2seq.pt"
 
-model_path = PROJECT_ROOT / "models" / "baseline_seq2seq.pt"
 if model_path.exists():
     state = torch.load(model_path, map_location="cpu")
     model.load_state_dict(state)
@@ -86,31 +110,10 @@ else:
 def translate_text(text: str) -> str:
     if not text or not text.strip():
         return ""
-
-    tokens = str(text).strip().split()
-    src_ids = [SOS_IDX] + [source_token_id(tok) for tok in tokens] + [EOS_IDX]
-    src_tensor = torch.tensor(src_ids, dtype=torch.long).unsqueeze(1)
-
-    with torch.no_grad():
-        hidden, cell = model.encoder(src_tensor)
-        trg_indexes = [SOS_IDX]
-
-        for _ in range(70):
-            current_input = torch.tensor([trg_indexes[-1]], dtype=torch.long)
-            output, hidden, cell = model.decoder(current_input, hidden, cell)
-            pred_token = output.argmax(1).item()
-            trg_indexes.append(pred_token)
-            if pred_token == EOS_IDX:
-                break
-
-    translated = [
-        inv_amh_vocab.get(i, "<UNK>")
-        for i in trg_indexes
-        if i not in (SOS_IDX, EOS_IDX, PAD_IDX)
-    ]
-    if not translated:
+    tokens, _ = translate_sentence(text, model, eng_vocab, inv_amh_vocab, max_len=70, device="cpu")
+    if not tokens:
         return "<UNK>"
-    return " ".join(translated)
+    return " ".join(tokens)
 
 
 def app_main(input_text: str):

@@ -39,27 +39,35 @@ def translate_sentence(
     model.eval()
     dev = device if device is not None else next(model.parameters()).device
 
-    # Tokenize and numericalize
     tokens = str(sentence).strip().split()
     src_ids = [SOS_IDX] + [src_vocab.get(t, UNK_IDX) for t in tokens] + [EOS_IDX]
-    src_tensor = torch.tensor(src_ids, dtype=torch.long, device=dev).unsqueeze(1)  # [src_len, 1]
+    src_tensor = torch.tensor(src_ids, dtype=torch.long, device=dev).unsqueeze(1)
 
     with torch.no_grad():
-        hidden, cell = model.encoder(src_tensor)
+        if hasattr(model, "generate"):
+            generated = model.generate(src_tensor, max_len=max_len, device=dev)
+            trg_indexes = generated[:, 0].tolist()
+        elif hasattr(model.decoder, "attention"):
+            encoder_outputs, hidden, cell = model.encoder.encode_with_outputs(src_tensor)
+            trg_indexes = [SOS_IDX]
+            for _ in range(max_len):
+                current_input = torch.tensor([trg_indexes[-1]], dtype=torch.long, device=dev)
+                output, hidden, cell, _ = model.decoder(current_input, hidden, cell, encoder_outputs)
+                pred_token = output.argmax(1).item()
+                trg_indexes.append(pred_token)
+                if pred_token == EOS_IDX:
+                    break
+        else:
+            hidden, cell = model.encoder(src_tensor)
+            trg_indexes = [SOS_IDX]
+            for _ in range(max_len):
+                current_input = torch.tensor([trg_indexes[-1]], dtype=torch.long, device=dev)
+                output, hidden, cell = model.decoder(current_input, hidden, cell)
+                pred_token = output.argmax(1).item()
+                trg_indexes.append(pred_token)
+                if pred_token == EOS_IDX:
+                    break
 
-        trg_indexes = [SOS_IDX]
-
-        for _ in range(max_len):
-            current_input = torch.tensor([trg_indexes[-1]], dtype=torch.long, device=dev)
-            output, hidden, cell = model.decoder(current_input, hidden, cell)
-
-            pred_token = output.argmax(1).item()
-            trg_indexes.append(pred_token)
-
-            if pred_token == EOS_IDX:
-                break
-
-    # Convert IDs to words (excluding <SOS> and <EOS>)
     trg_tokens = [
         trg_vocab_inv.get(i, "<UNK>")
         for i in trg_indexes
