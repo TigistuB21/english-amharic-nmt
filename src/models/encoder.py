@@ -52,8 +52,11 @@ class Encoder(nn.Module):
         Returns:
             Tuple of (hidden, cell) states of shape [num_layers, batch_size, hidden_dim].
         """
-        embedded = self.embedding(src)
-        # embedded shape: [src_len, batch_size, embedding_dim]
-
-        outputs, (hidden, cell) = self.lstm(embedded)
+        outputs, (hidden, cell) = self.lstm(self.embedding(src))
         return hidden, cell
+
+    def encode_with_outputs(self, src: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Return encoder outputs together with the final hidden and cell states."""
+        embedded = self.embedding(src)
+        outputs, (hidden, cell) = self.lstm(embedded)
+        return outputs, hidden, cell

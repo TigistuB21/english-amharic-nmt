@@ -16,6 +16,7 @@ def train_epoch(
     clip: float = 1.0,
     teacher_forcing_ratio: float = 0.5,
     device: Optional[Union[str, torch.device]] = None,
+    max_batches: Optional[int] = None,
 ) -> float:
     """
     Train model for one full epoch.
@@ -35,7 +36,9 @@ def train_epoch(
     model.train()
     epoch_loss = 0.0
 
-    for source, target in loader:
+    for batch_idx, (source, target) in enumerate(loader):
+        if max_batches is not None and batch_idx >= max_batches:
+            break
         if device is not None:
             source = source.to(device)
             target = target.to(device)
@@ -68,7 +71,8 @@ def train_epoch(
 
         epoch_loss += loss.item()
 
-    return epoch_loss / len(loader) if len(loader) > 0 else 0.0
+    batches_seen = min(len(loader), max_batches) if max_batches is not None else len(loader)
+    return epoch_loss / batches_seen if batches_seen > 0 else 0.0
 
 
 def run_sanity_training(

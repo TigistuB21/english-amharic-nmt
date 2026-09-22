@@ -11,6 +11,7 @@ def evaluate_epoch(
     loader: DataLoader,
     criterion: nn.Module,
     device: Optional[Union[str, torch.device]] = None,
+    max_batches: Optional[int] = None,
 ) -> float:
     """
     Evaluate model over an entire dataset split (teacher_forcing_ratio=0).
@@ -28,7 +29,9 @@ def evaluate_epoch(
     epoch_loss = 0.0
 
     with torch.no_grad():
-        for source, target in loader:
+        for batch_idx, (source, target) in enumerate(loader):
+            if max_batches is not None and batch_idx >= max_batches:
+                break
             if device is not None:
                 source = source.to(device)
                 target = target.to(device)
@@ -53,4 +56,5 @@ def evaluate_epoch(
             loss = criterion(output, target)
             epoch_loss += loss.item()
 
-    return epoch_loss / len(loader) if len(loader) > 0 else 0.0
+    batches_seen = min(len(loader), max_batches) if max_batches is not None else len(loader)
+    return epoch_loss / batches_seen if batches_seen > 0 else 0.0

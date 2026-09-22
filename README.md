@@ -170,6 +170,21 @@ Execute notebooks sequentially:
 5. `notebooks/05_model_training.ipynb`
 6. `notebooks/06_evaluation.ipynb`
 
+For the script-based workflow on Windows PowerShell, run:
+```powershell
+.\.venv\Scripts\python.exe scripts\run_pipeline.py
+$env:EPOCHS="1"
+$env:MAX_TRAIN_BATCHES="100"
+$env:MAX_VAL_BATCHES="20"
+$env:BATCH_SIZE="4"
+.\.venv\Scripts\python.exe scripts\train_model.py
+$env:MAX_EVAL_SAMPLES="20"
+.\.venv\Scripts\python.exe scripts\evaluate_model.py
+.\.venv\Scripts\python.exe app\demo.py
+```
+
+`MAX_TRAIN_BATCHES`, `MAX_VAL_BATCHES`, and `MAX_EVAL_SAMPLES` are optional CPU-friendly limits. Remove them for full-split processing; longer training generally requires substantially more time or a CUDA-enabled device. The evaluation report is written to `evaluation/results/baseline_report.json`.
+
 Or import directly into Python scripts:
 ```python
 from src.data.dataset import TranslationDataset, get_dataloader
